@@ -1,0 +1,12 @@
+{
+  "enabled": {
+    "description": "表情包功能总开关：关掉之后她不会再主动发表情包",
+    "type": "bool",
+    "default": true
+  },
+  "cooldown_turns": {
+    "description": "两次主动发表情之间至少间隔多少轮对话",
+    "type": "int",
+    "default": 5
+  }
+}

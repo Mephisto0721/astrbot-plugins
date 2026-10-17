@@ -1,0 +1,27 @@
+{
+  "inject_recent_count": {
+    "description": "每轮注入最近几条账本条目",
+    "type": "int",
+    "default": 3
+  },
+  "inject_due_count": {
+    "description": "每轮注入几条快到期的条目",
+    "type": "int",
+    "default": 3
+  },
+  "due_soon_hours": {
+    "description": "多久内算“快到期”（小时）",
+    "type": "int",
+    "default": 24
+  },
+  "scan_interval_seconds": {
+    "description": "后台扫描到期条目的间隔（秒）",
+    "type": "int",
+    "default": 60
+  },
+  "proactive_db_path": {
+    "description": "astrbot_plugin_proactive_contact 的数据库路径（留空自动探测）",
+    "type": "string",
+    "default": ""
+  }
+}

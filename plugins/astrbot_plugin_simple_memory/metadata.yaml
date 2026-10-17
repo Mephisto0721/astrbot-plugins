@@ -1,0 +1,4 @@
+name: astrbot_plugin_simple_memory
+desc: 用 SQLite + DeepSeek 给机器人加长期记忆
+version: 1.0.1
+author: Mephisto

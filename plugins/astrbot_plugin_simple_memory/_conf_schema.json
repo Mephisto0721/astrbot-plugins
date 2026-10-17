@@ -1,0 +1,27 @@
+{
+  "deepseek_api_key": {
+    "description": "DeepSeek API Key",
+    "type": "string",
+    "default": ""
+  },
+  "deepseek_base_url": {
+    "description": "API Base URL",
+    "type": "string",
+    "default": "https://api.deepseek.com/v1"
+  },
+  "deepseek_model": {
+    "description": "提取记忆用的模型",
+    "type": "string",
+    "default": "deepseek-chat"
+  },
+  "only_private": {
+    "description": "只在私聊生效（推荐开启）",
+    "type": "bool",
+    "default": true
+  },
+  "extract_every_n_turns": {
+    "description": "每 N 轮提取一次记忆（1 = 每轮，调大可省 token）",
+    "type": "int",
+    "default": 3
+  }
+}
