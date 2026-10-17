@@ -1,0 +1,21 @@
+# 插件运行时产生的数据库（里面有真实对话/记忆/账本，不要提交）
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 编辑器与系统杂项
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地产物
+*.log
+*.bak
