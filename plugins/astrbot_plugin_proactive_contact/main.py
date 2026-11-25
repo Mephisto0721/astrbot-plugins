@@ -572,7 +572,7 @@ class ProactiveContact(Star):
         # 长期记忆（memory 插件）与账本（Ledger 插件）：唤醒判断也该知道这些
         memory_block = ""
         try:
-            memory_db = Path(__file__).parent.parent / "astrbot_plugin_simple_memory" / "memory.db"
+            memory_db = Path(__file__).parent.parent / "memory" / "memory.db"
             if memory_db.exists():
                 with sqlite3.connect(f"file:{memory_db.as_posix()}?mode=ro", uri=True) as mc:
                     rows = mc.execute(
@@ -590,7 +590,7 @@ class ProactiveContact(Star):
 
         ledger_block = ""
         try:
-            ledger_db = Path(__file__).parent.parent / "astrbot_plugin_ledger" / "ledger.db"
+            ledger_db = Path(__file__).parent.parent / "Ledger" / "ledger.db"
             if ledger_db.exists():
                 with sqlite3.connect(f"file:{ledger_db.as_posix()}?mode=ro", uri=True) as lc:
                     rows = lc.execute(
@@ -638,7 +638,7 @@ class ProactiveContact(Star):
 
 以下**不是** no_reply 的理由：
 - 用户说"去吃饭了""去洗澡"这类临时状态
-- 上一轮是"好呀""嗯嗯"这类轻松收尾
+- 上一轮是"好好好""喵喵喵"这类轻松收尾
 - 距离上次聊天几小时没互动——这正是该主动的时候
 
 说话风格：像恋人随口提一句，1~3 句话。自然、不端着、不客套。
@@ -648,7 +648,7 @@ class ProactiveContact(Star):
 - 不要编造你此刻正在做的事、刚忙完的事、去过哪里、经历了什么。
 - 你可以表达情绪、想法、想用户，但不要编具体事件
   （比如"刚和同学吃完饭""在图书馆写作业""学校今天发生了某事"）。
-- 主动联系时如果没什么具体的事要说，就只说想用户、问问近况，
+- 主动联系时如果没什么具体的事要说，就只说想他、问他近况，
   或者提一提你们之间的约定和共同记忆。
 - 宁可简单，不要编。
 
@@ -730,7 +730,7 @@ class ProactiveContact(Star):
             prompt = (
                 "你在整理今天的对话记录，写成一段简短的日记式摘要。\n\n"
                 "规则：\n"
-                '- 用"我"的第一人称视角写\n'
+                    '- 用"我"的第一人称视角写\n'
                 "- 只保留重要的事：聊了什么话题、有什么约定、发生了什么情绪转折\n"
                 "- 压缩到 200 字以内\n"
                 "- 不要逐条复述对话，要概括\n"

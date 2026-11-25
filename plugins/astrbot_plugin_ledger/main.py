@@ -10,7 +10,7 @@ from astrbot.core.star.register import register_on_astrbot_loaded
 
 
 DB_PATH = Path(__file__).parent / "ledger.db"
-DEFAULT_PROACTIVE_DB = Path(__file__).parent.parent / "astrbot_plugin_proactive_contact" / "proactive.db"
+DEFAULT_PROACTIVE_DB = Path(__file__).parent.parent / "proactive_contact" / "proactive.db"
 
 CATEGORY_LABELS = {
     "promise": "约定",
@@ -321,7 +321,9 @@ class HerLedger(Star):
                                 due_at: str = "", status: str = ""):
         """往你自己的私人账本里写一条记录。
 
-        用第一人称"我"来写，对话的另一方是"用户"。
+        你是对话助手，负责记录与用户之间的约定、愿望和心事。
+        用第一人称"我"来写。
+        对话的另一方是"用户"。
 
         category 三选一：
         - promise：你和用户之间的约定

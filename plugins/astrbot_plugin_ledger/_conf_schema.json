@@ -20,7 +20,7 @@
     "default": 60
   },
   "proactive_db_path": {
-    "description": "astrbot_plugin_proactive_contact 的数据库路径（留空自动探测）",
+    "description": "proactive_contact 的数据库路径（留空自动探测）",
     "type": "string",
     "default": ""
   }

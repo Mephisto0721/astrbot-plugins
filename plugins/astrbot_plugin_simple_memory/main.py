@@ -1,4 +1,6 @@
+import re
 import sqlite3
+from datetime import datetime, timedelta
 from pathlib import Path
 from difflib import SequenceMatcher
 
@@ -28,6 +30,16 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # v2：区分「临时事件」和「永久事实」，并给事件加发生日期
+        cols = {r[1] for r in c.execute("PRAGMA table_info(memories)")}
+        if "kind" not in cols:
+            c.execute("ALTER TABLE memories ADD COLUMN kind TEXT DEFAULT 'fact'")
+        if "event_date" not in cols:
+            c.execute("ALTER TABLE memories ADD COLUMN event_date TEXT")
+        if "status" not in cols:
+            c.execute("ALTER TABLE memories ADD COLUMN status TEXT DEFAULT 'active'")
+        if "last_used_at" not in cols:
+            c.execute("ALTER TABLE memories ADD COLUMN last_used_at TIMESTAMP")
 
 
 def all_memories():
@@ -42,13 +54,65 @@ def is_duplicate(text: str) -> bool:
     return False
 
 
-def add_memory(text: str) -> bool:
-    """返回 True 表示写入成功，False 表示重复跳过"""
+def add_memory(text: str, kind: str = "fact", event_date: str | None = None) -> bool:
+    """返回 True 表示写入成功，False 表示重复跳过。
+
+    kind: 'fact' 永久事实 / 'event' 临时事件
+    event_date: 事件发生日期（YYYY-MM-DD），event 才有
+    """
     if is_duplicate(text):
         return False
     with _conn() as c:
-        c.execute("INSERT INTO memories (content) VALUES (?)", (text,))
+        c.execute(
+            "INSERT INTO memories (content, kind, event_date) VALUES (?, ?, ?)",
+            (text, kind, event_date),
+        )
     return True
+
+
+def archive_old_events(days: int = 7) -> int:
+    """超过 N 天的临时事件标成 archived：不删除，只是不再注入。"""
+    with _conn() as c:
+        cur = c.execute(
+            "UPDATE memories SET status = 'archived' "
+            "WHERE kind = 'event' AND status = 'active' "
+            "AND created_at < datetime('now', ?)",
+            (f"-{days} days",),
+        )
+        return cur.rowcount
+
+
+def recent_facts(limit: int = 20):
+    with _conn() as c:
+        return c.execute(
+            "SELECT id, content FROM memories "
+            "WHERE (kind IS NULL OR kind = 'fact') AND (status IS NULL OR status = 'active') "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+
+def recent_events(days: int = 3, limit: int = 10):
+    with _conn() as c:
+        return c.execute(
+            "SELECT id, content, event_date FROM memories "
+            "WHERE kind = 'event' AND (status IS NULL OR status = 'active') "
+            "AND created_at >= datetime('now', ?) "
+            "ORDER BY id DESC LIMIT ?",
+            (f"-{days} days", limit),
+        ).fetchall()
+
+
+def bump_used(ids: list[int]) -> None:
+    """记录这些记忆被注入过（留给以后做冷热排序用）。"""
+    if not ids:
+        return
+    marks = ",".join("?" * len(ids))
+    with _conn() as c:
+        try:
+            c.execute(f"UPDATE memories SET last_used_at = CURRENT_TIMESTAMP WHERE id IN ({marks})", ids)
+        except sqlite3.OperationalError:
+            pass  # 老库没有这一列就跳过
 
 
 def delete_memory(mid: int) -> bool:
@@ -67,6 +131,17 @@ def search_memories(kw: str):
         return c.execute(
             "SELECT id, content FROM memories WHERE content LIKE ? ORDER BY id",
             (f"%{kw}%",),
+        ).fetchall()
+
+
+def search_facts(kw: str, limit: int = 10):
+    """只搜永久事实（事件有时效，不适合按关键词捞）。"""
+    with _conn() as c:
+        return c.execute(
+            "SELECT id, content FROM memories "
+            "WHERE content LIKE ? AND (kind IS NULL OR kind = 'fact') "
+            "AND (status IS NULL OR status = 'active') LIMIT ?",
+            (f"%{kw}%", limit),
         ).fetchall()
 
 
@@ -133,39 +208,58 @@ class SimpleMemory(Star):
             req.system_prompt = (req.system_prompt or "") + "\n\n" + self._inject_cache
             return
 
-        # 1) 最近 20 条必定注入
-        with _conn() as c:
-            recent = c.execute(
-                "SELECT id, content FROM memories ORDER BY id DESC LIMIT 20"
-            ).fetchall()
+        # 刷新时顺手把过期的临时事件归档（只标状态，不删除）
+        try:
+            n_arch = archive_old_events(7)
+            if n_arch:
+                logger.info(f"[记忆] 归档过期事件 {n_arch} 条")
+        except Exception as e:
+            logger.warning(f"[记忆] 归档失败: {e}")
 
-        # 2) 关键词匹配
+        # 1) 永久事实：最近 20 条
+        facts = recent_facts(20)
+
+        # 2) 临时事件：最近 3 天，最多 10 条，带日期
+        events = recent_events(3, 10)
+
+        # 3) 关键词匹配（只搜事实）
         matched = []
         if user_msg:
             import re
             keywords = re.findall(r"[\u4e00-\u9fa5]{2,}", user_msg)
-            seen = set(content for _, content in recent)
+            seen = {content for _, content in facts}
             for kw in keywords:
-                rows = search_memories(kw)
-                for mid, content in rows:
+                for mid, content in search_facts(kw):
                     if content not in seen:
                         seen.add(content)
                         matched.append((mid, content))
 
-        all_rows = recent + matched[:20]
+        lines = []
+        if facts:
+            lines.append("【长期记住的】")
+            lines.extend(f"- {content}" for _, content in facts)
+        if events:
+            lines.append("【最近几天发生的（括号里是日期）】")
+            for _mid, content, edate in events:
+                d = (edate or "")[5:] or "?"
+                lines.append(f"- [{d}] {content}")
+        if matched:
+            lines.append("【和当前话题相关的】")
+            lines.extend(f"- {content}" for _, content in matched[:10])
 
-        if all_rows:
-            lines = "\n".join(f"- {content}" for _, content in all_rows)
+        if lines:
             memory_block = (
-                "以下是你长期记住的关于用户的事实（相关部分）：\n"
-                f"{lines}\n\n"
+                "以下是你记住的关于用户的信息（相关部分）：\n"
+                + "\n".join(lines)
+                + "\n\n"
             )
         else:
             memory_block = "你目前还没有关于用户的长期记忆。\n\n"
 
         prefix = (
             memory_block
-            + "回答时自然地使用这些信息，不要生硬复述，也不要主动列出全部。\n"
+            + "带日期的条目是「那几天发生的事」，已经过去的就别当成现在还在发生。\n"
+            "回答时自然地使用这些信息，不要生硬复述，也不要主动列出全部。\n"
             "如果你需要按关键词精确定位某条记忆，可以调用 recall_memory 工具；\n"
             "想知道记忆规模时，可以调用 memory_stats 工具。\n"
             "当你判断某条关于用户的稳定事实值得长期保留时，主动调用 remember 写入。"
@@ -194,30 +288,42 @@ class SimpleMemory(Star):
         if not user_msg or not reply:
             return
 
+        # v2 补丁：提取 prompt 需要「今天」的具体日期（原来漏了这段定义）
+        now = datetime.now()
+        today_s = now.strftime("%Y-%m-%d")
+        today_md = now.strftime("%m-%d")
+        tomorrow_md = (now + timedelta(days=1)).strftime("%m-%d")
+
         prompt = f"""你在阅读一段对话。
 [用户] 是正在和你对话的人，[我] 是你自己。
+今天是 {today_s}。
 
 从这段对话里，提取值得长期记住的关于**用户**的稳定事实。
 
+每条先判断类型，只输出下面两种格式之一：
+- [fact] 长期成立的事实
+- [event] MM-DD 只在某几天发生的事
+
 规则：
-1. **只从 [用户] 说的话里提取事实。** [我] 说的话只是上下文，不要从里面提取。
-2. 只提取 [用户] **明确说过**的：身份、偏好、习惯、重要关系、长期计划、明确表达过的感受。
-3. 如果代词（我/你）指代不明确，**跳过这条**，不要瞎猜。
-4. **主语必须明确**，用"用户"或"我"：
-   - 好：用户养了一只叫咪咪的猫
-   - 好：用户做后端开发
-   - 好：我答应过用户周末陪他看电影
-   - 不好：养了一只猫（看不出主语是谁）
-   - 不好：助手告诉了用户 XXX（你自己不是"助手"）
-5. 不要提取寒暄、临时状态、当次提问内容。
-6. 一行一条，不要编号，不要解释。
-7. 表达模糊（"可能""大概""听说"）的不要提取。
+1. **只从 [用户] 说的话里提取。** [我] 说的话只是上下文，不要从里面提取。
+2. **[fact]**：身份、偏好、习惯、重要关系、长期计划。
+   例：[fact] 用户养了一只叫咪咪的猫
+   例：[fact] 用户住在杭州，做后端开发
+3. **[event]**：发生在具体日子里的事——上课、考试、出门、生病、临时安排。
+   **必须把「今天/明天/昨天/这周」换算成具体日期 MM-DD。**
+   例：用户说「我今天有课」→ [event] {today_md} 用户有课
+   例：用户说「明天要考试」→ [event] {tomorrow_md} 用户有考试
+4. 代词（我/你）指代不明确 → 跳过这条，不要瞎猜。
+5. 主语必须明确，用"用户"或"我"；不要用"助手""机器人"。
+6. 不要提取寒暄、当次提问、纯情绪发泄。
+7. 表达模糊（"可能""大概""听说"）→ 不提取。
+8. 一行一条，不要编号，不要解释。没有可提取的就输出：无
 
 对话内容：
 [用户] {user_msg}
 [我] {reply}
 
-事实："""
+提取结果："""
 
         try:
             r = await client.chat.completions.create(
@@ -242,9 +348,27 @@ class SimpleMemory(Star):
         saved = 0
         for line in text.splitlines():
             line = line.strip(" -•·\t")
-            if not line or len(line) > 200:
+            if not line or len(line) > 220:
                 continue
-            if add_memory(line):
+
+            m = re.match(r"^\[(fact|event)\]\s*(.*)$", line)
+            kind, body = "fact", line
+            if m:
+                kind, body = m.group(1), m.group(2).strip()
+
+            event_date = None
+            if kind == "event":
+                dm = re.match(r"^(\d{1,2})-(\d{1,2})\s*(.*)$", body)
+                if dm:
+                    mm, dd, rest = int(dm.group(1)), int(dm.group(2)), dm.group(3).strip()
+                    event_date = f"{now.year:04d}-{mm:02d}-{dd:02d}"
+                    body = rest
+                else:
+                    event_date = today_s
+                if not body:
+                    continue
+
+            if body and add_memory(body, kind=kind, event_date=event_date):
                 saved += 1
         if saved:
             logger.info(f"新增 {saved} 条记忆")
@@ -369,11 +493,13 @@ class SimpleMemory(Star):
         - 用户明确说"记住……"
         - 用户透露了身份、偏好、习惯、重要关系、长期计划
         - 出现了以后可能会用到的稳定事实
+        注意：你是对话助手。
         写事实时主语用"用户"或"我"
 
         - 提取前想一想：这条是不是和"用户请我吃饭""用户答应我某事"这类已经说过很多次的重复？
             如果是同一件事的复述，跳过。
 
+        
         不要写入：
         - 寒暄、临时情绪、当次提问内容
         - 你自己说过的话（这不是关于用户的事实）
