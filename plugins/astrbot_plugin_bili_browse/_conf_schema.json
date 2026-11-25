@@ -1,0 +1,92 @@
+{
+  "enabled": {
+    "description": "总开关：关掉后完全不跑心跳",
+    "type": "bool",
+    "default": true
+  },
+  "target_umo": {
+    "description": "发到哪个会话（留空 = 自动探测 proactive_contact 里启用的会话）",
+    "type": "string",
+    "default": ""
+  },
+  "sessdata": {
+    "description": "手动填 SESSDATA（扫码失败时兜底，留空即可）",
+    "type": "string",
+    "default": ""
+  },
+  "windows": {
+    "description": "可刷时段，格式 起-止,起-止（24 制小时）。默认一整个白天",
+    "type": "string",
+    "default": "8-23"
+  },
+  "max_per_day": {
+    "description": "每天最多刷几次",
+    "type": "int",
+    "default": 3
+  },
+  "max_asks_per_day": {
+    "description": "每天最多问她几次「想不想刷」（防止反复烧 token）",
+    "type": "int",
+    "default": 6
+  },
+  "min_gap_hours": {
+    "description": "两次之间至少隔几小时（从上一次刷成功算起）",
+    "type": "int",
+    "default": 4
+  },
+  "keywords": {
+    "description": "兴趣关键词（逗号分隔，留空则自动生成）",
+    "type": "string",
+    "default": ""
+  },
+  "auto_keywords": {
+    "description": "关键词为空时，从最近对话里自动生成",
+    "type": "bool",
+    "default": true
+  },
+  "read_count": {
+    "description": "每次实际读几条字幕",
+    "type": "int",
+    "default": 3
+  },
+  "memory_days": {
+    "description": "聊天时注入「最近刷到过什么」的天数",
+    "type": "int",
+    "default": 3
+  },
+  "memory_lines": {
+    "description": "注入块最多列几条",
+    "type": "int",
+    "default": 6
+  },
+  "subtitle_max_chars": {
+    "description": "单条字幕最多读多少字",
+    "type": "int",
+    "default": 1500
+  },
+  "max_video_minutes": {
+    "description": "超过这个时长（分钟）的视频直接跳过",
+    "type": "int",
+    "default": 15
+  },
+  "asr_enabled": {
+    "description": "没字幕时是否本地转写（需要先装转写环境）",
+    "type": "bool",
+    "default": false
+  },
+  "asr_max_minutes": {
+    "description": "转写只处理多长的视频（分钟）",
+    "type": "int",
+    "default": 10
+  },
+  "quiet_if_user_active_minutes": {
+    "description": "主人多少分钟内说过话就不打扰",
+    "type": "int",
+    "default": 30
+  },
+  "decide_model": {
+    "description": "决策用模型（留空 = 用 AstrBot 当前对话模型）",
+    "type": "string",
+    "default": ""
+  }
+}
